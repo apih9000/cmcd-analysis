@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS.js CMCD Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/dist/date-fns.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script>
+        // Register the date-fns adapter with error handling
+        try {
+            if (typeof ChartjsAdapterDateFns === 'undefined') {
+                console.log('ChartjsAdapterDateFns is not loaded!');
+            } else {
+                Chart.register(ChartjsAdapterDateFns);
+                console.log('ChartjsAdapterDateFns registered successfully');
+            }
+        } catch (error) {
+            console.error('Error registering ChartjsAdapterDateFns:', error);
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Player CMCD Analytics</h1>
+        
+        <div class="player-container">
+            <video id="video" controls></video>
+            <div class="controls">
+                <div class="url-control">
+                    <div class="url-input-group">
+                        <label for="streamUrl">Stream URL:</label>
+                        <input type="text" id="streamUrl" value="https://demo-public.gvideo.io/cmaf/2675_19146/master.m3u8" class="url-input">
+                    </div>
+                    <div class="url-input-group">
+                        <label for="quickLinks">Quick links:</label>
+                        <select id="quickLinks" class="url-select">
+                            <option value="https://demo-public.gvideo.io/cmaf/2675_19146/master.m3u8">Live 24/7</option>
+                            <option value="https://demo-public.gvideo.io/videos/2675_zH5vyOfkNqoxzei/master.m3u8">VOD</option>
+                        </select>
+                        <button id="useSelectedLink" class="url-button">paste selected link</button>
+                    </div>
+                </div>
+                <button id="initializePlayer" class="url-button">Initialize & Play</button>
+            </div>
+        </div>
+        <p class="metrics-description">These metrics show what exactly the player is sending to the server and how the server can respond to them.</p>
+
+        <div class="gauges-container">
+            <label class="gauge-label-main" for="requestType">Video metrics:</label>
+            <div class="gauge-item">
+                <div class="gauge-label">Rebuffering %</div>
+                <div class="gauge-value">
+                    <span id="rebufferingPercentage">0.00%</span>
+                    <span id="rebufferingAlert" class="alert-icon" style="display: none;">⚠️</span>
+                </div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Buffer drops</div>
+                <div class="gauge-value">
+                    <span id="bufferDrops">0</span>
+                    <span id="bufferDropsAlert" class="alert-icon" style="display: none;">⚠️</span>
+                </div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Avg Buffer</div>
+                <div class="gauge-value" id="averageBuffer">0.00 sec</div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Avg Bitrate</div>
+                <div class="gauge-value" id="averageBitrate">0.00 Mbps</div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Max Bitrate</div>
+                <div class="gauge-value" id="maxBitrate">0.00 Mbps</div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Avg Throughput</div>
+                <div class="gauge-value">
+                    <span id="averageThroughput">0.00 Mbps</span>
+                    <span id="throughputAlert" class="alert-icon" style="display: none;">⚠️</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="audio-gauges-container">
+            <label class="gauge-label-main" for="requestType">Audio metrics:</label>
+            <div class="gauge-item">
+                <div class="gauge-label">Rebuffering %</div>
+                <div class="gauge-value">
+                    <span id="audioRebufferingPercentage">0.00%</span>
+                    <span id="audioRebufferingAlert" class="alert-icon" style="display: none;">⚠️</span>
+                </div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Buffer drops</div>
+                <div class="gauge-value">
+                    <span id="audioBufferDrops">0</span>
+                    <span id="audioBufferDropsAlert" class="alert-icon" style="display: none;">⚠️</span>
+                </div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Avg Buffer</div>
+                <div class="gauge-value" id="audioAverageBuffer">0.00 sec</div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Avg Bitrate</div>
+                <div class="gauge-value" id="audioAverageBitrate">0.00 Mbps</div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Max Bitrate</div>
+                <div class="gauge-value" id="audioMaxBitrate">0.00 Mbps</div>
+            </div>
+            <div class="gauge-item">
+                <div class="gauge-label">Avg Throughput</div>
+                <div class="gauge-value">
+                    <span id="audioAverageThroughput">0.00 Mbps</span>
+                    <span id="audioThroughputAlert" class="alert-icon" style="display: none;">⚠️</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-controls">
+            <label for="requestType">Request Type:</label>
+            <select id="requestType">
+                <option value="all">All</option>
+                <option value="m">Manifest/Playlist</option>
+                <option value="a">Audio Only</option>
+                <option value="v">Video Only</option>
+                <option value="av">Muxed Audio/Video</option>
+                <option value="i">Init Segment</option>
+                <option value="c">Caption/Subtitle</option>
+                <option value="tt">ISOBMFF Timed Text</option>
+                <option value="k">Cryptographic Key/License</option>
+                <option value="o">Other</option>
+            </select>
+            <label for="timeframe">Timeframe (seconds):</label>
+            <input type="number" id="timeframe" value="60" min="1">
+            <button id="clearLog">Clear Log</button>
+        </div>        <div class="analytics-container">
+            <div class="requests-log">
+                <h2>CMCD Requests Log</h2>
+                <textarea id="requestsLog" readonly></textarea>
+            </div>
+
+            <div class="graphs-container">
+                <div class="graphs-controls">
+                    <h2>CMCD Metrics</h2>
+                    <canvas id="bufferLengthChart"></canvas>
+                    <canvas id="bitrateChart"></canvas>
+                    <canvas id="measuredThroughputChart"></canvas>
+                    <canvas id="playbackRateChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="cmcd-info">
+        <h2>What is CMCD?</h2>
+        <p>Common Media Client Data (CMCD) is a standard that enables media clients to communicate performance and playback metrics to media servers. This information helps servers monitor delivery using client-side metrics.</p>
+        <p>The most important thing is that now client-side metrics are finally available on the server-side, which complement monitoring and help to optimize delivery.</p>
+        
+        <h3>CMCD Parameters</h3>
+        <table class="cmcd-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Description</th>
+                    <th>Unit</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>bl (Buffer Length)</td>
+                    <td>Current buffer length of the media being played</td>
+                    <td>milliseconds</td>
+                </tr>
+                <tr>
+                    <td>br (Encoded Bitrate)</td>
+                    <td>Encoded bitrate of the current segment</td>
+                    <td>bits per second</td>
+                </tr>
+                <tr>
+                    <td>bs (Buffer State)</td>
+                    <td>Current state of the buffer</td>
+                    <td>enum (0 = stable, 1 = growing, 2 = shrinking)</td>
+                </tr>
+                <tr>
+                    <td>cid (Content ID)</td>
+                    <td>Unique identifier for the content being played</td>
+                    <td>string</td>
+                </tr>
+                <tr>
+                    <td>nrr (Next Request Range)</td>
+                    <td>Range of the next segment to be requested</td>
+                    <td>bytes</td>
+                </tr>
+                <tr>
+                    <td>ot (Object Type)</td>
+                    <td>Type of object being requested</td>
+                    <td>enum (v = video, a = audio, av = audio+video)</td>
+                </tr>
+                <tr>
+                    <td>pr (Playback Rate)</td>
+                    <td>Current playback rate relative to normal speed</td>
+                    <td>ratio (1.0 = normal)</td>
+                </tr>
+                <tr>
+                    <td>sid (Session ID)</td>
+                    <td>Unique identifier for the playback session</td>
+                    <td>string</td>
+                </tr>
+                <tr>
+                    <td>su (Startup)</td>
+                    <td>Indicates if the request is for startup</td>
+                    <td>boolean</td>
+                </tr>
+                <tr>
+                    <td>tb (Throughput)</td>
+                    <td>Target bitrate for the next segment</td>
+                    <td>bits per second</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>How to enable CMCD in players</h3>
+        <div class="player-links">
+            <div class="player-link-item">
+                <h4>HLS.js</h4>
+                <p>Enable CMCD in the HLS.js configuration:</p>
+                <pre><code>const hls = new Hls({
+    cmcd: {
+        enabled: true,
+        sessionId: 'session-' + Date.now(),
+        version: 1
+    }
+});</code></pre>
+                <a href="https://github.com/video-dev/hls.js/blob/master/docs/API.md#cmcd" target="_blank" class="player-link">Documentation</a>
+            </div>
+
+            <div class="player-link-item">
+                <h4>Shaka Player</h4>
+                <p>Enable CMCD in the Shaka Player configuration:</p>
+                <pre><code>const player = new shaka.Player(videoElement);
+player.configure({
+    streaming: {
+        cmcd: {
+            enabled: true,
+            sessionId: 'session-' + Date.now(),
+            version: 1
+        }
+    }
+});</code></pre>
+                <a href="https://shaka-player-demo.appspot.com/docs/api/libshaka.Player.html#configure" target="_blank" class="player-link">Documentation</a>
+            </div>
+
+
+            <div class="player-link-item">
+                <h4>DASH.js</h4>
+                <p>Enable CMCD in the DASH.js configuration:</p>
+                <pre><code>const player = dashjs.MediaPlayer().create();
+player.initialize(videoElement, manifestUrl, {
+    streaming: {
+        cmcd: {
+            enabled: true,
+            sessionId: 'session-' + Date.now(),
+            version: 1
+        }
+    }
+});</code></pre>
+                <a href="https://github.com/Dash-Industry-Forum/dash.js/wiki" target="_blank" class="player-link">Documentation</a>
+            </div>
+
+            <div class="player-link-item">
+                <h4>ExoPlayer (Android)</h4>
+                <p>Enable CMCD in the ExoPlayer configuration:</p>
+                <pre><code>// Create CMCD configuration factory
+val cmcdConfigurationFactory = object : CmcdConfiguration.Factory {
+    override fun createCmcdConfiguration(mediaItem: MediaItem): CmcdConfiguration {
+        val cmcdRequestConfig = object : CmcdConfiguration.RequestConfig { }
+        val sessionId = UUID.randomUUID().toString()
+        val contentId = UUID.randomUUID().toString()
+        return CmcdConfiguration(sessionId, contentId, cmcdRequestConfig, CmcdConfiguration.MODE_QUERY_PARAMETER)
+    }
+}
+
+// Create media source factory with CMCD configuration
+val mediaSourceFactory = DefaultMediaSourceFactory(context)
+    .setCmcdConfigurationFactory(cmcdConfigurationFactory)
+
+// Create player with the media source factory
+val player = ExoPlayer.Builder(context)
+    .setMediaSourceFactory(mediaSourceFactory)
+    .build()
+
+// Set media item
+val mediaItem = MediaItem.fromUri(manifestUrl)
+player.setMediaItem(mediaItem)
+player.prepare()</code></pre>
+                <a href="https://exoplayer.dev/cmcd.html" target="_blank" class="player-link">Documentation</a>
+            </div>
+
+            <div class="player-link-item">
+                <h4>AVPlayer (iOS)</h4>
+                <p>Enable CMCD in the AVPlayer configuration:</p>
+                <pre><code>// Create AVPlayer instance
+let player = AVPlayer()
+
+// Configure CMCD
+let cmcdConfig = AVPlayerItemCMCDConfiguration()
+cmcdConfig.isEnabled = true
+cmcdConfig.sessionID = UUID().uuidString
+cmcdConfig.contentID = UUID().uuidString
+cmcdConfig.version = 1
+
+// Set allowed CMCD keys
+cmcdConfig.allowedKeys = ["br", "bl", "pr", "bs"]
+
+// Create AVPlayerItem with CMCD configuration
+let playerItem = AVPlayerItem(url: videoURL)
+playerItem.cmcdConfiguration = cmcdConfig
+
+// Set the player item
+player.replaceCurrentItem(with: playerItem)</code></pre>
+                <a href="https://developer.apple.com/documentation/avfoundation/avplayeritemcmcdconfiguration" target="_blank" class="player-link">Documentation</a>
+            </div>
+
+            <div class="player-link-item">
+                <h4>Gcore Video Player</h4>
+                <p>CMCD is enabled by default.</p>
+                <a href="https://github.com/G-Core/gcore-videoplayer-js/blob/main/packages/player/README.md" target="_blank" class="player-link">Documentation</a>
+            </div>
+        </div>
+    </div>
+    <script src="app.js" defer></script>
+</body>
+</html> 
