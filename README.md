@@ -14,6 +14,9 @@ This demo shows what exactly the player is sending to the server and how the ser
 
 <img src="https://github.com/apih9000/cmcd-analysis/blob/main/screenshots/cmcd-analysis.jpg?raw=true" width="200px" />
 
+## Live demo
+Live demo is available here – [https://codepen.io/apih9000/pen/XJWOYZW](https://codepen.io/apih9000/pen/XJWOYZW) 
+
 ## CMCD Parameters
 Some interesting parameters to start from (full list you can see in the official documentation):
 - bl (Buffer Length).  Current buffer length of the media being played	milliseconds. To detect how often buufer is emptied. 
